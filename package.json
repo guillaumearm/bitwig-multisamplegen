@@ -51,6 +51,7 @@
   "dependencies": {
     "execa": "4.1.0",
     "inquirer": "7.3.3",
+    "jszip": "^3.7.1",
     "ora": "5.1.0",
     "p-each-series": "2.1.0",
     "ramda": "^0.28.0",
@@ -64,6 +65,7 @@
     "@types/execa": "2.0.0",
     "@types/inquirer": "7.3.1",
     "@types/jest": "26.0.14",
+    "@types/jszip": "^3.4.1",
     "@types/ora": "3.2.0",
     "@types/p-each-series": "1.0.1",
     "@types/ramda": "^0.28.3",

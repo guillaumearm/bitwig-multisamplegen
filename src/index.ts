@@ -5,6 +5,9 @@ import yargs from 'yargs'
 import fs from 'fs'
 import path from 'path'
 import { sortBy } from 'ramda'
+import inquirer from 'inquirer'
+
+import JSZip from 'jszip'
 
 const args = yargs.argv
 
@@ -33,6 +36,8 @@ const isFileExist = async (givenPath: string): Promise<boolean> => {
   } catch (e) {}
   return false
 }
+
+const MULTISAMPLE_FILE = 'multisample.xml'
 
 const DEFAULT_VELOCITY = 127
 
@@ -251,6 +256,63 @@ const generateMultiSampleXml = (samples: Sample[]): string => {
   return xmlResult
 }
 
+// const generateMultiSampleXmlFile = async (
+//   pathdir: string,
+//   samples: Sample[]
+// ): Promise<boolean> => {
+//   const multiSampleXmlPath = path.join(pathdir, MULTISAMPLE_FILE)
+
+//   if (await isFileExist(multiSampleXmlPath)) {
+//     ora(`${MULTISAMPLE_FILE} file already exist!`).fail()
+//     return false
+//   }
+
+//   const spinner = ora(`Generate ${MULTISAMPLE_FILE} file`).start()
+
+//   const xml = generateMultiSampleXml(samples)
+//   await fs.promises.writeFile(multiSampleXmlPath, xml)
+
+//   spinner.text = `Generated ${MULTISAMPLE_FILE} file`
+//   spinner.succeed()
+//   return true
+// }
+
+const generateZipFile = async (
+  pathdir: string,
+  samples: Sample[],
+  givenPackageName: string
+) => {
+  const packageName = `${givenPackageName}.multisample`
+
+  if (await isFileExist(packageName)) {
+    ora(`File '${packageName}' already exist!`).fail()
+    return
+  }
+
+  const zip = new JSZip()
+
+  zip.file(MULTISAMPLE_FILE, generateMultiSampleXml(samples))
+
+  const spinner = ora('Copy sample files...').start()
+
+  for (const sample of samples) {
+    const filename = path.join(pathdir, sample.name)
+
+    spinner.text = `Reading '${filename}' sample file...`
+
+    const buffer = await fs.promises.readFile(filename)
+    zip.file(sample.name, buffer)
+  }
+
+  spinner.text = `Creating '${packageName}' multisample package file...`
+
+  const buffer = await zip.generateAsync({ type: 'nodebuffer' })
+  await fs.promises.writeFile(path.join(pathdir, packageName), buffer, 'binary')
+
+  spinner.text = `Successfully created '${packageName}' multisample package file!`
+  spinner.succeed()
+}
+
 const app = async () => {
   const pathdir = args._[0]
   if (pathdir) {
@@ -267,20 +329,21 @@ const app = async () => {
       return
     }
 
-    const multiSampleXmlPath = path.join(pathdir, 'multisample.xml')
+    const info: any = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'packageName',
+        message: 'Multisample Package name',
+        validate: (input: string) => {
+          return input && input.length > 0
+        },
+        default: ''
+      }
+    ])
 
-    if (await isFileExist(multiSampleXmlPath)) {
-      ora('multisample.xml file already exist!').fail()
-      return
-    }
+    const packageName: string = info.packageName
 
-    const spinner = ora(`Generate multisample.xml file`).start()
-
-    const xml = generateMultiSampleXml(samples)
-    await fs.promises.writeFile(multiSampleXmlPath, xml)
-
-    spinner.text = `Generated multisample.xml file`
-    spinner.succeed()
+    await generateZipFile(pathdir, samples, packageName)
   } else {
     ora(`Usage: ${args.$0} <pathdir>`).warn()
   }
