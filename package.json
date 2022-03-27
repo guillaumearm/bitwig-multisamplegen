@@ -1,6 +1,6 @@
 {
   "name": "bitwig-multisamplegen",
-  "version": "0.1.5",
+  "version": "1.0.0",
   "description": "Generate multisample xml file from samples ",
   "author": "guillaumearm",
   "license": "MIT",
