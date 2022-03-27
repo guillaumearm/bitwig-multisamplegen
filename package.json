@@ -10,7 +10,7 @@
     "url": "git+https://github.com/guillaumearm/bitwig-multisamplegen.git"
   },
   "bin": {
-    "create-ts-cli-app": "./dist/index.js"
+    "bitwig-multisamplegen": "./dist/index.js"
   },
   "main": "dist/index.js",
   "module": "dist/index.modern.js",

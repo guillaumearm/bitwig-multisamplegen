@@ -15,8 +15,7 @@
       "legacyDecorators": true
     }
   },
-  "settings": {
-  },
+  "settings": {},
   "rules": {
     "space-before-function-paren": 0,
     "react/prop-types": 0,
