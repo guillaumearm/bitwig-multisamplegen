@@ -37,6 +37,9 @@ const isFileExist = async (givenPath: string): Promise<boolean> => {
   return false
 }
 
+// TODO inquirer prompt
+const AUTHOR_NAME = 'Trapcodien'
+
 const MULTISAMPLE_FILE = 'multisample.xml'
 
 const DEFAULT_VELOCITY = 127
@@ -238,12 +241,16 @@ const generateSampleXml = (sample: Sample): string => {
 `
 }
 
-const generateMultiSampleXml = (samples: Sample[]): string => {
+const generateMultiSampleXml = (
+  instrumentName: string,
+  author: string,
+  samples: Sample[]
+): string => {
   let xmlResult = `<?xml version="1.0" encoding="UTF-8"?>
-<multisample name="Generated Instrument">
+<multisample name="${instrumentName}">
   <generator>Bitwig Studio</generator>
   <category></category>
-  <creator>Trapcodien</creator>
+  <creator>${author}</creator>
   <description></description>
   <keywords></keywords>
   `
@@ -291,7 +298,13 @@ const generateZipFile = async (
 
   const zip = new JSZip()
 
-  zip.file(MULTISAMPLE_FILE, generateMultiSampleXml(samples))
+  zip.file(
+    MULTISAMPLE_FILE,
+    generateMultiSampleXml(givenPackageName, AUTHOR_NAME, samples),
+    {
+      compression: 'DEFLATE'
+    }
+  )
 
   const spinner = ora('Copy sample files...').start()
 
@@ -301,7 +314,9 @@ const generateZipFile = async (
     spinner.text = `Reading '${filename}' sample file...`
 
     const buffer = await fs.promises.readFile(filename)
-    zip.file(sample.name, buffer)
+    zip.file(sample.name, buffer, {
+      compression: 'DEFLATE'
+    })
   }
 
   spinner.text = `Creating '${packageName}' multisample package file...`
