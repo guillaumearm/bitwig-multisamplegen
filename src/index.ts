@@ -72,6 +72,14 @@ type Sample = {
   velocityMax: number
 }
 
+const getVelocity = (parsed: ParsedFileName): number => {
+  if (parsed.velocity === undefined) {
+    return DEFAULT_VELOCITY
+  }
+
+  return parsed.velocity
+}
+
 const getNoteNumber = (parsed: ParsedFileName): number => {
   const note = parsed.note.toUpperCase()
   const noteIndex = ALL_NOTES.findIndex((n) => n === note)
@@ -106,7 +114,7 @@ const getFileNamesByNoteNumber = (
   // sort by velocity
   Object.keys(result).forEach((k) => {
     const n = Number(k)
-    result[n] = sortBy((x) => x.velocity ?? DEFAULT_VELOCITY, result[n])
+    result[n] = sortBy((x) => getVelocity(x), result[n])
   })
 
   return result
@@ -116,7 +124,7 @@ const getSampleFromParsed = (parsed: ParsedFileName[]): Sample[] => {
   let velocityMin = 0
 
   return parsed.reduce((acc: Sample[], parsed) => {
-    const velocityMax = parsed.velocity ?? DEFAULT_VELOCITY
+    const velocityMax = getVelocity(parsed)
 
     const sample = {
       name: parsed.fullname,
@@ -159,7 +167,7 @@ const parseFileName = (filename: string): ParsedFileName | null => {
     return null
   }
 
-  if (isNaN(parsed.velocity ?? 127)) {
+  if (isNaN(getVelocity(parsed))) {
     ora(`unable to parse velocity: '${res[4]}'`).fail()
     return null
   }
