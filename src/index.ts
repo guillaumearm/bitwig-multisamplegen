@@ -41,10 +41,9 @@ const isFileExist = async (givenPath: string): Promise<boolean> => {
 const AUTHOR_NAME = 'Trapcodien'
 
 const MULTISAMPLE_FILE = 'multisample.xml'
-
 const DEFAULT_VELOCITY = 127
-
 const ALLOWED_EXTENSIONS = ['wav', 'aif', 'mp3', 'ogg']
+const COMPRESSION_TYPE = 'DEFLATE'
 
 const ALL_NOTES = [
   'C',
@@ -165,7 +164,7 @@ const parseFileName = (filename: string): ParsedFileName | null => {
     extension: res[6]
   }
 
-  if (!ALLOWED_EXTENSIONS.includes(parsed.extension)) {
+  if (!ALLOWED_EXTENSIONS.includes(parsed.extension.toLowerCase())) {
     ora(`ignored '${parsed.fullname}' file`).warn()
     return null
   }
@@ -302,7 +301,7 @@ const generateZipFile = async (
     MULTISAMPLE_FILE,
     generateMultiSampleXml(givenPackageName, AUTHOR_NAME, samples),
     {
-      compression: 'DEFLATE'
+      compression: COMPRESSION_TYPE
     }
   )
 
@@ -315,7 +314,7 @@ const generateZipFile = async (
 
     const buffer = await fs.promises.readFile(filename)
     zip.file(sample.name, buffer, {
-      compression: 'DEFLATE'
+      compression: COMPRESSION_TYPE
     })
   }
 
