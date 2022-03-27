@@ -224,7 +224,7 @@ const readFileNames = async (
 
 const generateSampleXml = (sample: Sample): string => {
   return `
-  <sample file="${sample.name}" gain="0.00" parameter-1="0.0000" parameter-2="0.0000" parameter-3="0.0000" reverse="false" sample-start="0.000" zone-logic="always-play">
+  <sample file="${sample.name}" gain="0.00" parameter-1="0.0000" parameter-2="0.0000" parameter-3="0.0000" reverse="false" sample-start="0.000" sample-stop="-1" zone-logic="always-play">
     <key low="${sample.key}" high="${sample.key}" root="${sample.key}" track="1.0000" tune="0.00"/>
     <velocity low="${sample.velocityMin}" high="${sample.velocityMax}" />
     <select low="0" high="127"/>
