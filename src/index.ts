@@ -491,7 +491,7 @@ const computeHighKey = (
 const stretchNotes = (allSamples: Sample[], valueMode: ValueMode): Sample[] => {
   let result: Sample[] = []
   const groupedSamples = groupBy(
-    (x) => String(`${x.prefix}-${x.initialNumber}-${x.postfix}.${x.extension}`),
+    (x) => String(`${x.prefix}-${x.initialNumber}-${x.postfix}`),
     allSamples
   )
 
