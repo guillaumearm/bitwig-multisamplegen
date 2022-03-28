@@ -43,7 +43,7 @@ const AUTHOR_NAME = 'Trapcodien'
 const MULTISAMPLE_FILE = 'multisample.xml'
 const DEFAULT_VELOCITY = 127
 const ALLOWED_EXTENSIONS = ['wav', 'aif', 'mp3', 'ogg']
-const COMPRESSION_TYPE = 'DEFLATE'
+const DEFAULT_COMPRESSION_TYPE = 'DEFLATE'
 
 const ALL_NOTES = [
   'C',
@@ -364,7 +364,8 @@ const transformSamples = (allSamples: Sample[]): Sample[] => {
 const generateZipFile = async (
   pathdir: string,
   samples: Sample[],
-  givenPackageName: string
+  givenPackageName: string,
+  compression: 'DEFLATE' | undefined
 ) => {
   const packageName = `${givenPackageName}.multisample`
 
@@ -378,9 +379,7 @@ const generateZipFile = async (
   zip.file(
     MULTISAMPLE_FILE,
     generateMultiSampleXml(givenPackageName, AUTHOR_NAME, samples),
-    {
-      compression: COMPRESSION_TYPE
-    }
+    { compression }
   )
 
   const spinner = ora('Copy sample files...').start()
@@ -391,9 +390,7 @@ const generateZipFile = async (
     spinner.text = `Reading '${filename}' sample file...`
 
     const buffer = await fs.promises.readFile(filename)
-    zip.file(sample.name, buffer, {
-      compression: COMPRESSION_TYPE
-    })
+    zip.file(sample.name, buffer, { compression })
   }
 
   spinner.text = `Creating '${packageName}' multisample package file...`
@@ -430,10 +427,23 @@ const app = async () => {
           return input && input.length > 0
         },
         default: ''
+      },
+      {
+        type: 'confirm',
+        name: 'compression',
+        message: 'Enable compression ?',
+        default: true
       }
     ])
 
-    await generateZipFile(pathdir, transformSamples(samples), info.packageName)
+    const compression = info.compression ? DEFAULT_COMPRESSION_TYPE : undefined
+
+    await generateZipFile(
+      pathdir,
+      transformSamples(samples),
+      info.packageName,
+      compression
+    )
   } else {
     ora(`Usage: ${args.$0} <pathdir>`).warn()
   }
