@@ -153,13 +153,15 @@ const getFileNamesByNoteNumber = (
 }
 
 const getSampleFromParsed = (
-  parsed: ParsedFileName[],
+  allParsed: ParsedFileName[],
   valueMode: ValueMode
 ): Sample[] => {
   let selectionMin = 0
   let velocityMin = 0
 
-  return parsed.reduce((acc: Sample[], parsed) => {
+  const maxIndex = allParsed.length - 1
+
+  return allParsed.reduce((acc: Sample[], parsed, index) => {
     const velocityMax = getVelocity(parsed)
     const selectionMax = getSelection(parsed)
     const key = getNoteNumber(parsed)
@@ -177,8 +179,18 @@ const getSampleFromParsed = (
 
     if (valueMode === 'Velocity') {
       velocityMin = velocityMax + 1
+
+      // if last element
+      if (index === maxIndex) {
+        sample.velocityMax = 127
+      }
     } else if (valueMode === 'Selection') {
       selectionMin = selectionMax + 1
+
+      // if last element
+      if (index === maxIndex) {
+        sample.selectionMax = 127
+      }
     }
 
     return [...acc, sample]
@@ -436,6 +448,7 @@ const stretchNotes = (allSamples: Sample[], valueMode: ValueMode): Sample[] => {
       const computedSample = computeLowKey(samples, sample, index)
       return computeHighKey(samples, computedSample, index)
     })
+
     result = [...result, ...nextSamples]
   })
 
