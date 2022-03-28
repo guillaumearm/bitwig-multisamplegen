@@ -4,7 +4,7 @@ import ora from 'ora'
 import yargs from 'yargs'
 import fs from 'fs'
 import path from 'path'
-import { sortBy } from 'ramda'
+import { groupBy, sortBy } from 'ramda'
 import inquirer from 'inquirer'
 
 import JSZip from 'jszip'
@@ -75,6 +75,8 @@ type FileNamesByNoteNumber = Record<number, ParsedFileName[]>
 type Sample = {
   name: string
   key: number
+  lowKey: number
+  highKey: number
   velocityMin: number
   velocityMax: number
 }
@@ -132,10 +134,13 @@ const getSampleFromParsed = (parsed: ParsedFileName[]): Sample[] => {
 
   return parsed.reduce((acc: Sample[], parsed) => {
     const velocityMax = getVelocity(parsed)
+    const key = getNoteNumber(parsed)
 
     const sample = {
       name: parsed.fullname,
-      key: getNoteNumber(parsed),
+      key,
+      lowKey: key,
+      highKey: key,
       velocityMin,
       velocityMax
     }
@@ -232,7 +237,7 @@ const readFileNames = async (
 const generateSampleXml = (sample: Sample): string => {
   return `
   <sample file="${sample.name}" gain="0.00" parameter-1="0.0000" parameter-2="0.0000" parameter-3="0.0000" reverse="false" sample-start="0.000" sample-stop="-1" zone-logic="always-play">
-    <key low="${sample.key}" high="${sample.key}" root="${sample.key}" track="1.0000" tune="0.00"/>
+    <key low="${sample.lowKey}" high="${sample.highKey}" root="${sample.key}" track="1.0000" tune="0.00"/>
     <velocity low="${sample.velocityMin}" high="${sample.velocityMax}" />
     <select low="0" high="127"/>
     <loop fade="0.0000" mode="off" start="0.000" />
@@ -282,6 +287,79 @@ const generateMultiSampleXml = (
 //   spinner.succeed()
 //   return true
 // }
+
+const computeLowKey = (
+  samples: Sample[],
+  sample: Sample,
+  index: number
+): Sample => {
+  if (index === 0) {
+    return {
+      ...sample,
+      lowKey: 0
+    }
+  }
+
+  const previousSample = samples[index - 1]
+
+  const value = Math.trunc((sample.key - previousSample.key) / 2)
+  const lowKey = Math.max(0, sample.key - value + 1)
+
+  return {
+    ...sample,
+    lowKey
+  }
+}
+
+const computeHighKey = (
+  samples: Sample[],
+  sample: Sample,
+  index: number
+): Sample => {
+  if (index >= samples.length - 1) {
+    return {
+      ...sample,
+      highKey: 127
+    }
+  }
+
+  const nextSample = samples[index + 1]
+
+  const value = Math.trunc((nextSample.key - sample.key + 1) / 2)
+  const highKey = Math.min(127, sample.key + value)
+
+  return {
+    ...sample,
+    highKey
+  }
+}
+
+/**
+ * stretch notes and apply fades if needed
+ */
+const transformSamples = (allSamples: Sample[]): Sample[] => {
+  let result: Sample[] = []
+  const groupedSamples = groupBy((x) => String(x.velocityMax), allSamples)
+
+  Object.keys(groupedSamples).forEach((velocity) => {
+    // sort sample by key
+    groupedSamples[velocity] = sortBy(
+      (sample) => sample.key,
+      groupedSamples[velocity]
+    )
+
+    // compute highKey and lowKey
+    const samples = groupedSamples[velocity]
+
+    const nextSamples = groupedSamples[velocity].map((sample, index) => {
+      const computedSample = computeLowKey(samples, sample, index)
+      return computeHighKey(samples, computedSample, index)
+    })
+    result = [...result, ...nextSamples]
+  })
+
+  return result
+}
 
 const generateZipFile = async (
   pathdir: string,
@@ -343,7 +421,7 @@ const app = async () => {
       return
     }
 
-    const info: any = await inquirer.prompt([
+    const info = await inquirer.prompt([
       {
         type: 'input',
         name: 'packageName',
@@ -355,9 +433,7 @@ const app = async () => {
       }
     ])
 
-    const packageName: string = info.packageName
-
-    await generateZipFile(pathdir, samples, packageName)
+    await generateZipFile(pathdir, transformSamples(samples), info.packageName)
   } else {
     ora(`Usage: ${args.$0} <pathdir>`).warn()
   }
