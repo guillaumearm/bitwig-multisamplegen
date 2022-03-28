@@ -87,6 +87,9 @@ type Sample = {
   initialNumber: string
   selectionMin: number
   selectionMax: number
+  prefix: string
+  postfix: string
+  extension: string
 }
 
 const getVelocity = (parsed: ParsedFileName): number => {
@@ -206,6 +209,9 @@ const getSampleFromParsed = (
         velocityMax: valueMode === 'Velocity' ? velocityMax : 127,
         selectionMin: valueMode === 'Selection' ? selectionMin : 0,
         selectionMax: valueMode === 'Selection' ? selectionMax : 127,
+        prefix: parsed.prefix,
+        postfix: parsed.postfix,
+        extension: parsed.extension,
         initialNumber: parsed.initialNumber
       }
 
@@ -489,10 +495,10 @@ const computeHighKey = (
 
 const stretchNotes = (allSamples: Sample[], valueMode: ValueMode): Sample[] => {
   let result: Sample[] = []
-  const groupedSamples =
-    valueMode === 'Velocity'
-      ? groupBy((x) => String(x.velocityMax), allSamples)
-      : groupBy((x) => String(x.selectionMax), allSamples)
+  const groupedSamples = groupBy(
+    (x) => String(`${x.prefix}-${x.initialNumber}-${x.postfix}.${x.extension}`),
+    allSamples
+  )
 
   Object.keys(groupedSamples).forEach((k) => {
     // sort sample by key
