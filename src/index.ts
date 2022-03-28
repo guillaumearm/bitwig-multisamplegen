@@ -37,7 +37,6 @@ const isFileExist = async (givenPath: string): Promise<boolean> => {
   return false
 }
 
-// TODO inquirer prompt
 const AUTHOR_NAME = 'Trapcodien'
 
 const MULTISAMPLE_FILE = 'multisample.xml'
@@ -274,7 +273,12 @@ const readFileNames = async (
   return res
 }
 
-const generateSampleXml = (sample: Sample, keyfade: number): string => {
+const generateSampleXml = (
+  sample: Sample,
+  keyfade: number,
+  valueMode: ValueMode,
+  valueFade: number
+): string => {
   const keyLowFade =
     sample.lowKey > 0
       ? Math.min(keyfade, Math.abs(sample.key - sample.lowKey))
@@ -284,11 +288,38 @@ const generateSampleXml = (sample: Sample, keyfade: number): string => {
       ? Math.min(keyfade, Math.abs(sample.highKey - sample.key))
       : 0
 
+  const maximumFadeVelocity = Math.trunc(
+    Math.abs(sample.velocityMax - sample.velocityMin) / 2
+  )
+
+  const velocityLowFade =
+    valueMode === 'Velocity' && sample.velocityMin > 0
+      ? Math.min(valueFade, maximumFadeVelocity)
+      : 0
+  const velocityHighFade =
+    valueMode === 'Velocity' && sample.velocityMax < 127
+      ? Math.min(valueFade, maximumFadeVelocity)
+      : 0
+
+  const maximumFadeSelection = Math.trunc(
+    Math.abs(sample.selectionMax - sample.selectionMin) / 2
+  )
+
+  const selectLowFade =
+    valueMode === 'Selection' && sample.selectionMin > 0
+      ? Math.min(valueFade, maximumFadeSelection)
+      : 0
+
+  const selectHighFade =
+    valueMode === 'Selection' && sample.selectionMax < 127
+      ? Math.min(valueFade, maximumFadeSelection)
+      : 0
+
   return `
   <sample file="${sample.name}" gain="0.00" parameter-1="0.0000" parameter-2="0.0000" parameter-3="0.0000" reverse="false" sample-start="0.000" sample-stop="-1" zone-logic="always-play">
     <key low-fade="${keyLowFade}" high-fade="${keyHighFade}" low="${sample.lowKey}" high="${sample.highKey}" root="${sample.key}" track="1.0000" tune="0.00"/>
-    <velocity low="${sample.velocityMin}" high="${sample.velocityMax}" />
-    <select low="${sample.selectionMin}" high="${sample.selectionMax}"/>
+    <velocity low-fade="${velocityLowFade}" high-fade="${velocityHighFade}" low="${sample.velocityMin}" high="${sample.velocityMax}" />
+    <select low-fade="${selectLowFade}" high-fade="${selectHighFade}" low="${sample.selectionMin}" high="${sample.selectionMax}"/>
     <loop fade="0.0000" mode="off" start="0.000" />
   </sample>
 `
@@ -298,7 +329,9 @@ const generateMultiSampleXml = (
   instrumentName: string,
   author: string,
   samples: Sample[],
-  keyfade: number
+  keyfade: number,
+  valueMode: ValueMode,
+  valueFade: number
 ): string => {
   let xmlResult = `<?xml version="1.0" encoding="UTF-8"?>
 <multisample name="${instrumentName}">
@@ -310,7 +343,8 @@ const generateMultiSampleXml = (
   `
 
   samples.forEach((sample) => {
-    xmlResult = xmlResult + generateSampleXml(sample, keyfade)
+    xmlResult =
+      xmlResult + generateSampleXml(sample, keyfade, valueMode, valueFade)
   })
 
   xmlResult = xmlResult + '</multisample>'
@@ -411,21 +445,39 @@ const stretchNotes = (allSamples: Sample[], valueMode: ValueMode): Sample[] => {
 /**
  * - stretch notes
  * - apply key fades
- * - TODO: apply velocity fades
+ * - apply velocity/selection fades
  */
 const transformSamples = (
   givenSamples: Sample[],
   keyfade: number,
-  valueMode: ValueMode
+  valueMode: ValueMode,
+  valueFade: number
 ): Sample[] => {
   const allSamples = stretchNotes(givenSamples, valueMode)
-  return allSamples.map((sample) => {
-    return {
-      ...sample,
-      lowKey: Math.max(0, sample.lowKey - keyfade),
-      highKey: Math.min(127, sample.highKey + keyfade)
-    }
-  })
+  return allSamples
+    .map((sample) => {
+      return {
+        ...sample,
+        lowKey: Math.max(0, sample.lowKey - keyfade),
+        highKey: Math.min(127, sample.highKey + keyfade)
+      }
+    })
+    .map((sample) => {
+      if (valueMode === 'Velocity') {
+        return {
+          ...sample,
+          velocityMin: Math.max(0, sample.velocityMin - valueFade),
+          velocityMax: Math.min(127, sample.velocityMax + valueFade)
+        }
+      } else if (valueMode === 'Selection') {
+        return {
+          ...sample,
+          selectionMin: Math.max(0, sample.selectionMin - valueFade),
+          selectionMax: Math.min(127, sample.selectionMax + valueFade)
+        }
+      }
+      return sample
+    })
 }
 
 const generateZipFile = async (
@@ -433,7 +485,9 @@ const generateZipFile = async (
   samples: Sample[],
   givenPackageName: string,
   keyfade: number,
-  compression: 'DEFLATE' | undefined
+  compression: 'DEFLATE' | undefined,
+  valueMode: ValueMode,
+  valueFade: number
 ) => {
   const packageName = `${givenPackageName}.multisample`
 
@@ -446,7 +500,14 @@ const generateZipFile = async (
 
   zip.file(
     MULTISAMPLE_FILE,
-    generateMultiSampleXml(givenPackageName, AUTHOR_NAME, samples, keyfade),
+    generateMultiSampleXml(
+      givenPackageName,
+      AUTHOR_NAME,
+      samples,
+      keyfade,
+      valueMode,
+      valueFade
+    ),
     { compression }
   )
 
@@ -523,6 +584,20 @@ const app = async () => {
         }
       },
       {
+        type: 'input',
+        name: 'valueFade',
+        message: `${valueMode} fade value`,
+        default: 0,
+        validate(value) {
+          const valid = !isNaN(parseFloat(value))
+          return valid || 'Please enter a number'
+        },
+        filter: (value) => {
+          const valid = !isNaN(parseFloat(value))
+          return valid ? Math.abs(Number(value)) : ''
+        }
+      },
+      {
         type: 'confirm',
         name: 'compression',
         message: 'Enable compression ?',
@@ -534,10 +609,12 @@ const app = async () => {
 
     await generateZipFile(
       pathdir,
-      transformSamples(samples, info.keyfade, valueMode),
+      transformSamples(samples, info.keyfade, valueMode, info.valueFade),
       info.packageName,
       info.keyfade,
-      compression
+      compression,
+      valueMode,
+      info.valueFade
     )
   } else {
     ora(`Usage: ${args.$0} <pathdir>`).warn()
