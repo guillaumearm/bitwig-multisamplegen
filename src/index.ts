@@ -45,6 +45,10 @@ const DEFAULT_VELOCITY = 127
 const ALLOWED_EXTENSIONS = ['wav', 'aif', 'mp3', 'ogg']
 const DEFAULT_COMPRESSION_TYPE = 'DEFLATE'
 
+const DEFAULT_SELECTION_VALUE = DEFAULT_VELOCITY
+
+type ValueMode = 'Velocity' | 'Selection'
+
 const ALL_NOTES = [
   'C',
   'C#',
@@ -66,6 +70,7 @@ type ParsedFileName = {
   note: string
   octave: number
   velocity?: number
+  selection?: number
   postfix: string
   extension: string
 }
@@ -79,6 +84,8 @@ type Sample = {
   highKey: number
   velocityMin: number
   velocityMax: number
+  selectionMin: number
+  selectionMax: number
 }
 
 const getVelocity = (parsed: ParsedFileName): number => {
@@ -87,6 +94,14 @@ const getVelocity = (parsed: ParsedFileName): number => {
   }
 
   return parsed.velocity
+}
+
+const getSelection = (parsed: ParsedFileName): number => {
+  if (parsed.selection === undefined) {
+    return DEFAULT_SELECTION_VALUE
+  }
+
+  return parsed.selection
 }
 
 const getNoteNumber = (parsed: ParsedFileName): number => {
@@ -107,7 +122,8 @@ const getNoteNumber = (parsed: ParsedFileName): number => {
 }
 
 const getFileNamesByNoteNumber = (
-  filenames: ParsedFileName[]
+  filenames: ParsedFileName[],
+  valueMode: ValueMode
 ): FileNamesByNoteNumber => {
   const result: FileNamesByNoteNumber = {}
 
@@ -120,20 +136,33 @@ const getFileNamesByNoteNumber = (
     result[n].push(parsed)
   })
 
-  // sort by velocity
-  Object.keys(result).forEach((k) => {
-    const n = Number(k)
-    result[n] = sortBy((x) => getVelocity(x), result[n])
-  })
+  if (valueMode === 'Velocity') {
+    // sort by velocity
+    Object.keys(result).forEach((k) => {
+      const n = Number(k)
+      result[n] = sortBy((x) => getVelocity(x), result[n])
+    })
+  } else if (valueMode === 'Selection') {
+    // sort by selection
+    Object.keys(result).forEach((k) => {
+      const n = Number(k)
+      result[n] = sortBy((x) => getSelection(x), result[n])
+    })
+  }
 
   return result
 }
 
-const getSampleFromParsed = (parsed: ParsedFileName[]): Sample[] => {
+const getSampleFromParsed = (
+  parsed: ParsedFileName[],
+  valueMode: ValueMode
+): Sample[] => {
+  let selectionMin = 0
   let velocityMin = 0
 
   return parsed.reduce((acc: Sample[], parsed) => {
     const velocityMax = getVelocity(parsed)
+    const selectionMax = getSelection(parsed)
     const key = getNoteNumber(parsed)
 
     const sample = {
@@ -141,16 +170,26 @@ const getSampleFromParsed = (parsed: ParsedFileName[]): Sample[] => {
       key,
       lowKey: key,
       highKey: key,
-      velocityMin,
-      velocityMax
+      velocityMin: valueMode === 'Velocity' ? velocityMin : 0,
+      velocityMax: valueMode === 'Velocity' ? velocityMax : 127,
+      selectionMin: valueMode === 'Selection' ? selectionMin : 0,
+      selectionMax: valueMode === 'Selection' ? selectionMax : 127
     }
-    velocityMin = velocityMax + 1
+
+    if (valueMode === 'Velocity') {
+      velocityMin = velocityMax + 1
+    } else if (valueMode === 'Selection') {
+      selectionMin = selectionMax + 1
+    }
 
     return [...acc, sample]
   }, [] as Sample[])
 }
 
-const parseFileName = (filename: string): ParsedFileName | null => {
+const parseFileName = (
+  filename: string,
+  valueMode: ValueMode
+): ParsedFileName | null => {
   const res = filename.match(
     /^(.*)([abcdefgABCDEFG]#?)([0-9])-?(\d{1,3})?(.*)\.(.*)/
   )
@@ -164,7 +203,8 @@ const parseFileName = (filename: string): ParsedFileName | null => {
     prefix: res[1],
     note: res[2],
     octave: Number(res[3]),
-    velocity: Number(res[4]),
+    velocity: valueMode === 'Velocity' ? Number(res[4]) : 127,
+    selection: valueMode === 'Selection' ? Number(res[4]) : 127,
     postfix: res[5],
     extension: res[6]
   }
@@ -191,18 +231,18 @@ const parseFileName = (filename: string): ParsedFileName | null => {
   return parsed
 }
 
-const getAllSamples = (filenames: string[]): Sample[] => {
+const getAllSamples = (filenames: string[], valueMode: ValueMode): Sample[] => {
   const parsedFilenames = filenames
-    .map(parseFileName)
+    .map((filename) => parseFileName(filename, valueMode))
     .filter((parsed): parsed is ParsedFileName => !!parsed)
 
-  const filenamesByNote = getFileNamesByNoteNumber(parsedFilenames)
+  const filenamesByNote = getFileNamesByNoteNumber(parsedFilenames, valueMode)
 
   let result: Sample[] = []
 
   Object.keys(filenamesByNote).forEach((k) => {
     const n = Number(k)
-    result = [...result, ...getSampleFromParsed(filenamesByNote[n])]
+    result = [...result, ...getSampleFromParsed(filenamesByNote[n], valueMode)]
   })
 
   return result
@@ -236,15 +276,19 @@ const readFileNames = async (
 
 const generateSampleXml = (sample: Sample, keyfade: number): string => {
   const keyLowFade =
-    sample.lowKey > 0 ? Math.min(keyfade, sample.key - sample.lowKey) : 0
+    sample.lowKey > 0
+      ? Math.min(keyfade, Math.abs(sample.key - sample.lowKey))
+      : 0
   const keyHighFade =
-    sample.highKey < 127 ? Math.min(keyfade, sample.highKey - sample.key) : 0
+    sample.highKey < 127
+      ? Math.min(keyfade, Math.abs(sample.highKey - sample.key))
+      : 0
 
   return `
   <sample file="${sample.name}" gain="0.00" parameter-1="0.0000" parameter-2="0.0000" parameter-3="0.0000" reverse="false" sample-start="0.000" sample-stop="-1" zone-logic="always-play">
     <key low-fade="${keyLowFade}" high-fade="${keyHighFade}" low="${sample.lowKey}" high="${sample.highKey}" root="${sample.key}" track="1.0000" tune="0.00"/>
     <velocity low="${sample.velocityMin}" high="${sample.velocityMax}" />
-    <select low="0" high="127"/>
+    <select low="${sample.selectionMin}" high="${sample.selectionMax}"/>
     <loop fade="0.0000" mode="off" start="0.000" />
   </sample>
 `
@@ -340,21 +384,21 @@ const computeHighKey = (
   }
 }
 
-const stretchNotes = (allSamples: Sample[]): Sample[] => {
+const stretchNotes = (allSamples: Sample[], valueMode: ValueMode): Sample[] => {
   let result: Sample[] = []
-  const groupedSamples = groupBy((x) => String(x.velocityMax), allSamples)
+  const groupedSamples =
+    valueMode === 'Velocity'
+      ? groupBy((x) => String(x.velocityMax), allSamples)
+      : groupBy((x) => String(x.selectionMax), allSamples)
 
-  Object.keys(groupedSamples).forEach((velocity) => {
+  Object.keys(groupedSamples).forEach((k) => {
     // sort sample by key
-    groupedSamples[velocity] = sortBy(
-      (sample) => sample.key,
-      groupedSamples[velocity]
-    )
+    groupedSamples[k] = sortBy((sample) => sample.key, groupedSamples[k])
 
     // compute highKey and lowKey
-    const samples = groupedSamples[velocity]
+    const samples = groupedSamples[k]
 
-    const nextSamples = groupedSamples[velocity].map((sample, index) => {
+    const nextSamples = groupedSamples[k].map((sample, index) => {
       const computedSample = computeLowKey(samples, sample, index)
       return computeHighKey(samples, computedSample, index)
     })
@@ -371,9 +415,10 @@ const stretchNotes = (allSamples: Sample[]): Sample[] => {
  */
 const transformSamples = (
   givenSamples: Sample[],
-  keyfade: number
+  keyfade: number,
+  valueMode: ValueMode
 ): Sample[] => {
-  const allSamples = stretchNotes(givenSamples)
+  const allSamples = stretchNotes(givenSamples, valueMode)
   return allSamples.map((sample) => {
     return {
       ...sample,
@@ -434,7 +479,19 @@ const app = async () => {
       return
     }
 
-    const samples = getAllSamples(fileNames)
+    const valueModePayload = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'valueMode',
+        message: 'Choose the desired value mode',
+        default: 'Velocity' as ValueMode,
+        choices: ['Velocity', 'Selection'] as ValueMode[]
+      }
+    ])
+
+    const valueMode: ValueMode = valueModePayload.valueMode
+
+    const samples = getAllSamples(fileNames, valueMode)
 
     if (samples.length === 0) {
       ora(`Warning: no valid sample files found in directory`).fail()
@@ -477,7 +534,7 @@ const app = async () => {
 
     await generateZipFile(
       pathdir,
-      transformSamples(samples, info.keyfade),
+      transformSamples(samples, info.keyfade, valueMode),
       info.packageName,
       info.keyfade,
       compression
