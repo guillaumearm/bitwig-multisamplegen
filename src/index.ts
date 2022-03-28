@@ -317,6 +317,10 @@ const readFileNames = async (
   return res
 }
 
+const getParamValue = (value: number) => {
+  return Math.min(1, value / 127)
+}
+
 const generateSampleXml = (
   sample: Sample,
   keyfade: number,
@@ -376,10 +380,20 @@ const generateSampleXml = (
   const zoneLogic = roundRobinEnabled ? 'round-robin' : 'always-play'
 
   return `
-  <sample file="${sample.name}" gain="0.00" parameter-1="${param1}" parameter-2="${param2}" parameter-3="${param3}" reverse="false" sample-start="0.000" sample-stop="-1" zone-logic="${zoneLogic}">
-    <key low-fade="${keyLowFade}" high-fade="${keyHighFade}" low="${sample.lowKey}" high="${sample.highKey}" root="${sample.key}" track="1.0000" tune="0.00"/>
-    <velocity low-fade="${velocityLowFade}" high-fade="${velocityHighFade}" low="${sample.velocityMin}" high="${sample.velocityMax}" />
-    <select low-fade="${selectLowFade}" high-fade="${selectHighFade}" low="${sample.selectionMin}" high="${sample.selectionMax}"/>
+  <sample file="${sample.name}" gain="0.00" parameter-1="${getParamValue(
+    param1
+  )}" parameter-2="${getParamValue(param2)}" parameter-3="${getParamValue(
+    param3
+  )}" reverse="false" sample-start="0.000" sample-stop="-1" zone-logic="${zoneLogic}">
+    <key low-fade="${keyLowFade}" high-fade="${keyHighFade}" low="${
+    sample.lowKey
+  }" high="${sample.highKey}" root="${sample.key}" track="1.0000" tune="0.00"/>
+    <velocity low-fade="${velocityLowFade}" high-fade="${velocityHighFade}" low="${
+    sample.velocityMin
+  }" high="${sample.velocityMax}" />
+    <select low-fade="${selectLowFade}" high-fade="${selectHighFade}" low="${
+    sample.selectionMin
+  }" high="${sample.selectionMax}"/>
     <loop fade="0.0000" mode="off" start="0.000" />
   </sample>
 `
