@@ -234,10 +234,15 @@ const readFileNames = async (
   return res
 }
 
-const generateSampleXml = (sample: Sample): string => {
+const generateSampleXml = (sample: Sample, keyfade: number): string => {
+  const keyLowFade =
+    sample.lowKey > 0 ? Math.min(keyfade, sample.key - sample.lowKey) : 0
+  const keyHighFade =
+    sample.highKey < 127 ? Math.min(keyfade, sample.highKey - sample.key) : 0
+
   return `
   <sample file="${sample.name}" gain="0.00" parameter-1="0.0000" parameter-2="0.0000" parameter-3="0.0000" reverse="false" sample-start="0.000" sample-stop="-1" zone-logic="always-play">
-    <key low="${sample.lowKey}" high="${sample.highKey}" root="${sample.key}" track="1.0000" tune="0.00"/>
+    <key low-fade="${keyLowFade}" high-fade="${keyHighFade}" low="${sample.lowKey}" high="${sample.highKey}" root="${sample.key}" track="1.0000" tune="0.00"/>
     <velocity low="${sample.velocityMin}" high="${sample.velocityMax}" />
     <select low="0" high="127"/>
     <loop fade="0.0000" mode="off" start="0.000" />
@@ -248,7 +253,8 @@ const generateSampleXml = (sample: Sample): string => {
 const generateMultiSampleXml = (
   instrumentName: string,
   author: string,
-  samples: Sample[]
+  samples: Sample[],
+  keyfade: number
 ): string => {
   let xmlResult = `<?xml version="1.0" encoding="UTF-8"?>
 <multisample name="${instrumentName}">
@@ -260,7 +266,7 @@ const generateMultiSampleXml = (
   `
 
   samples.forEach((sample) => {
-    xmlResult = xmlResult + generateSampleXml(sample)
+    xmlResult = xmlResult + generateSampleXml(sample, keyfade)
   })
 
   xmlResult = xmlResult + '</multisample>'
@@ -334,10 +340,7 @@ const computeHighKey = (
   }
 }
 
-/**
- * stretch notes and apply fades if needed
- */
-const transformSamples = (allSamples: Sample[]): Sample[] => {
+const stretchNotes = (allSamples: Sample[]): Sample[] => {
   let result: Sample[] = []
   const groupedSamples = groupBy((x) => String(x.velocityMax), allSamples)
 
@@ -361,10 +364,30 @@ const transformSamples = (allSamples: Sample[]): Sample[] => {
   return result
 }
 
+/**
+ * - stretch notes
+ * - apply key fades
+ * - TODO: apply velocity fades
+ */
+const transformSamples = (
+  givenSamples: Sample[],
+  keyfade: number
+): Sample[] => {
+  const allSamples = stretchNotes(givenSamples)
+  return allSamples.map((sample) => {
+    return {
+      ...sample,
+      lowKey: Math.max(0, sample.lowKey - keyfade),
+      highKey: Math.min(127, sample.highKey + keyfade)
+    }
+  })
+}
+
 const generateZipFile = async (
   pathdir: string,
   samples: Sample[],
   givenPackageName: string,
+  keyfade: number,
   compression: 'DEFLATE' | undefined
 ) => {
   const packageName = `${givenPackageName}.multisample`
@@ -378,7 +401,7 @@ const generateZipFile = async (
 
   zip.file(
     MULTISAMPLE_FILE,
-    generateMultiSampleXml(givenPackageName, AUTHOR_NAME, samples),
+    generateMultiSampleXml(givenPackageName, AUTHOR_NAME, samples, keyfade),
     { compression }
   )
 
@@ -429,6 +452,20 @@ const app = async () => {
         default: ''
       },
       {
+        type: 'input',
+        name: 'keyfade',
+        message: 'Pitch fade value',
+        default: 0,
+        validate(value) {
+          const valid = !isNaN(parseFloat(value))
+          return valid || 'Please enter a number'
+        },
+        filter: (value) => {
+          const valid = !isNaN(parseFloat(value))
+          return valid ? Math.abs(Number(value)) : ''
+        }
+      },
+      {
         type: 'confirm',
         name: 'compression',
         message: 'Enable compression ?',
@@ -440,8 +477,9 @@ const app = async () => {
 
     await generateZipFile(
       pathdir,
-      transformSamples(samples),
+      transformSamples(samples, info.keyfade),
       info.packageName,
+      info.keyfade,
       compression
     )
   } else {
