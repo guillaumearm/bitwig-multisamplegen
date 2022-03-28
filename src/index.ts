@@ -421,27 +421,6 @@ const generateMultiSampleXml = (
   return xmlResult
 }
 
-// const generateMultiSampleXmlFile = async (
-//   pathdir: string,
-//   samples: Sample[]
-// ): Promise<boolean> => {
-//   const multiSampleXmlPath = path.join(pathdir, MULTISAMPLE_FILE)
-
-//   if (await isFileExist(multiSampleXmlPath)) {
-//     ora(`${MULTISAMPLE_FILE} file already exist!`).fail()
-//     return false
-//   }
-
-//   const spinner = ora(`Generate ${MULTISAMPLE_FILE} file`).start()
-
-//   const xml = generateMultiSampleXml(samples)
-//   await fs.promises.writeFile(multiSampleXmlPath, xml)
-
-//   spinner.text = `Generated ${MULTISAMPLE_FILE} file`
-//   spinner.succeed()
-//   return true
-// }
-
 const computeLowKey = (
   samples: Sample[],
   sample: Sample,
