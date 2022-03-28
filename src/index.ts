@@ -72,6 +72,7 @@ type ParsedFileName = {
   selection?: number
   postfix: string
   extension: string
+  initialNumber: string
 }
 
 type FileNamesByNoteNumber = Record<number, ParsedFileName[]>
@@ -83,6 +84,7 @@ type Sample = {
   highKey: number
   velocityMin: number
   velocityMax: number
+  initialNumber: string
   selectionMin: number
   selectionMax: number
 }
@@ -159,41 +161,72 @@ const getSampleFromParsed = (
   let selectionMin = 0
   let velocityMin = 0
 
-  const maxIndex = allParsed.length - 1
+  const grouped: Record<string, ParsedFileName[]> = groupBy(
+    (filename) =>
+      `${filename.note.toLowerCase()}${filename.octave}-${
+        filename.initialNumber
+      }`,
+    allParsed
+  )
 
-  return allParsed.reduce((acc: Sample[], parsed, index) => {
-    const velocityMax = getVelocity(parsed)
-    const selectionMax = getSelection(parsed)
-    const key = getNoteNumber(parsed)
+  const groupedKeys = Object.keys(grouped)
 
-    const sample = {
-      name: parsed.fullname,
-      key,
-      lowKey: key,
-      highKey: key,
-      velocityMin: valueMode === 'Velocity' ? velocityMin : 0,
-      velocityMax: valueMode === 'Velocity' ? velocityMax : 127,
-      selectionMin: valueMode === 'Selection' ? selectionMin : 0,
-      selectionMax: valueMode === 'Selection' ? selectionMax : 127
+  const maxIndex = groupedKeys.length - 1
+
+  return groupedKeys.reduce((acc: Sample[], k, index) => {
+    const parsedFileNames = grouped[k]
+
+    if (!parsedFileNames.length) {
+      return acc
     }
+
+    const firstParsed = parsedFileNames[0]
+
+    const velocityMax = getVelocity(firstParsed)
+    const selectionMax = getSelection(firstParsed)
+
+    let overrideVelocityMax = false
+    let overrideSelectionMax = false
+
+    // if last element
+    if (valueMode === 'Velocity' && index === maxIndex) {
+      overrideVelocityMax = true
+    } else if (valueMode === 'Selection' && index === maxIndex) {
+      overrideSelectionMax = true
+    }
+
+    const samples = parsedFileNames.map((parsed) => {
+      const key = getNoteNumber(parsed)
+      const sample = {
+        name: parsed.fullname,
+        key,
+        lowKey: key,
+        highKey: key,
+        velocityMin: valueMode === 'Velocity' ? velocityMin : 0,
+        velocityMax: valueMode === 'Velocity' ? velocityMax : 127,
+        selectionMin: valueMode === 'Selection' ? selectionMin : 0,
+        selectionMax: valueMode === 'Selection' ? selectionMax : 127,
+        initialNumber: parsed.initialNumber
+      }
+
+      if (overrideSelectionMax) {
+        sample.selectionMax = 127
+      }
+
+      if (overrideVelocityMax) {
+        sample.velocityMax = 127
+      }
+
+      return sample
+    })
 
     if (valueMode === 'Velocity') {
       velocityMin = velocityMax + 1
-
-      // if last element
-      if (index === maxIndex) {
-        sample.velocityMax = 127
-      }
     } else if (valueMode === 'Selection') {
       selectionMin = selectionMax + 1
-
-      // if last element
-      if (index === maxIndex) {
-        sample.selectionMax = 127
-      }
     }
 
-    return [...acc, sample]
+    return [...acc, ...samples]
   }, [] as Sample[])
 }
 
@@ -217,7 +250,8 @@ const parseFileName = (
     velocity: valueMode === 'Velocity' ? Number(res[4]) : 127,
     selection: valueMode === 'Selection' ? Number(res[4]) : 127,
     postfix: res[5],
-    extension: res[6]
+    extension: res[6],
+    initialNumber: res[4] || ''
   }
 
   if (!ALLOWED_EXTENSIONS.includes(parsed.extension.toLowerCase())) {
@@ -491,7 +525,7 @@ const transformSamples = (
   spreadSelectionsFadeValue: number | undefined
 ): Sample[] => {
   const allSamples = stretchNotes(givenSamples, valueMode)
-  const transformedSamples = allSamples
+  const transformedSamples: Sample[] = allSamples
     .map((sample) => {
       return {
         ...sample,
@@ -517,8 +551,41 @@ const transformSamples = (
     })
 
   if (spreadSelectionsFadeValue !== undefined) {
-    // TODO 1: group by `key + velocityMax`
-    // TODO 2: set selectionMin and selectionMax
+    const resultSamples: Sample[] = []
+
+    const grouped: Record<string, Sample[]> = groupBy(
+      (s) => `${s.key}${s.initialNumber}`,
+      transformedSamples
+    )
+
+    Object.keys(grouped).forEach((k) => {
+      const group = grouped[k]
+      if (group.length) {
+        const ratio = 127 / group.length
+
+        group.forEach((sample, index) => {
+          const newSample: Sample = {
+            ...sample,
+            selectionMin: Math.ceil(
+              Math.max(
+                0,
+                Math.min(127, index * ratio - spreadSelectionsFadeValue)
+              )
+            ),
+            selectionMax: Math.floor(
+              Math.max(
+                0,
+                Math.min(127, (index + 1) * ratio + spreadSelectionsFadeValue)
+              )
+            )
+          }
+
+          resultSamples.push(newSample)
+        })
+      }
+    })
+
+    return resultSamples
   }
 
   return transformedSamples
@@ -577,6 +644,23 @@ const generateZipFile = async (
   spinner.succeed()
 }
 
+const getNbDuplicateNotes = (samples: Sample[]): number => {
+  let counter = 0
+
+  const grouped: Record<string, Sample[]> = groupBy(
+    (s) => `${s.key}${s.initialNumber}`,
+    samples
+  )
+
+  Object.keys(grouped).forEach((k) => {
+    if (grouped[k].length > 1) {
+      counter += grouped[k].length
+    }
+  })
+
+  return counter
+}
+
 const app = async () => {
   const pathdir = args._[0]
   if (pathdir) {
@@ -604,6 +688,8 @@ const app = async () => {
       ora(`Warning: no valid sample files found in directory`).fail()
       return
     }
+
+    const nbDuplicateNotes = getNbDuplicateNotes(samples)
 
     const inquirerQuestions: ReadonlyArray<inquirer.DistinctQuestion<
       any
@@ -645,11 +731,11 @@ const app = async () => {
           return valid ? Math.abs(Number(value)) : ''
         }
       },
-      valueMode === 'Velocity' // TODO: check if there is any duplicate note
+      valueMode === 'Velocity' && nbDuplicateNotes > 0
         ? {
             type: 'confirm',
             name: 'spreadSelection',
-            message: 'Would you want to spread samples selection ?',
+            message: `${nbDuplicateNotes} duplicate notes found, Would you want to spread samples selection ?`,
             default: false
           }
         : null
