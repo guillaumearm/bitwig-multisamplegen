@@ -330,7 +330,8 @@ const generateSampleXml = (
   keyfade: number,
   valueMode: ValueMode,
   valueFade: number,
-  spreadSelectionsFadeValue: number | undefined
+  spreadSelectionsFadeValue: number | undefined,
+  roundRobinEnabled: boolean
 ): string => {
   const selectionFade =
     spreadSelectionsFadeValue === undefined
@@ -380,7 +381,7 @@ const generateSampleXml = (
   // TODO find an utility for this param (e.g. random using filename's prefix as a seed)
   const param3 = 0
 
-  const zoneLogic = 'always-play' // or 'round-robin'
+  const zoneLogic = roundRobinEnabled ? 'round-robin' : 'always-play'
 
   return `
   <sample file="${sample.name}" gain="0.00" parameter-1="${param1}" parameter-2="${param2}" parameter-3="${param3}" reverse="false" sample-start="0.000" sample-stop="-1" zone-logic="${zoneLogic}">
@@ -399,7 +400,8 @@ const generateMultiSampleXml = (
   keyfade: number,
   valueMode: ValueMode,
   valueFade: number,
-  spreadSelectionsFadeValue: number | undefined
+  spreadSelectionsFadeValue: number | undefined,
+  roundRobinEnabled: boolean
 ): string => {
   let xmlResult = `<?xml version="1.0" encoding="UTF-8"?>
 <multisample name="${instrumentName}">
@@ -418,7 +420,8 @@ const generateMultiSampleXml = (
         keyfade,
         valueMode,
         valueFade,
-        spreadSelectionsFadeValue
+        spreadSelectionsFadeValue,
+        roundRobinEnabled
       )
   })
 
@@ -605,7 +608,8 @@ const generateZipFile = async (
   compression: 'DEFLATE' | undefined,
   valueMode: ValueMode,
   valueFade: number,
-  spreadSelectionsFadeValue: number | undefined
+  spreadSelectionsFadeValue: number | undefined,
+  roundRobinEnabled: boolean
 ) => {
   const packageName = `${givenPackageName}.multisample`
 
@@ -625,7 +629,8 @@ const generateZipFile = async (
       keyfade,
       valueMode,
       valueFade,
-      spreadSelectionsFadeValue
+      spreadSelectionsFadeValue,
+      roundRobinEnabled
     ),
     { compression }
   )
@@ -787,6 +792,15 @@ const app = async () => {
 
     const compression = info2.compression ? DEFAULT_COMPRESSION_TYPE : undefined
 
+    const roundRobinAutoEnabled =
+      !info2.spreadSelectionFade && !info.keyfade && !info.valueFade
+
+    if (roundRobinAutoEnabled) {
+      ora(
+        'Round-Robin mode automatically enabled (becaause no fades are set)'
+      ).warn()
+    }
+
     await generateZipFile(
       pathdir,
       transformSamples(
@@ -801,7 +815,8 @@ const app = async () => {
       compression,
       valueMode,
       info.valueFade,
-      spreadSelectionsFadeValue
+      spreadSelectionsFadeValue,
+      roundRobinAutoEnabled
     )
   } else {
     ora(`Usage: ${args.$0} <pathdir>`).warn()

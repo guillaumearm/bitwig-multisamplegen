@@ -28,7 +28,7 @@
     "lint": "run-s lint:js lint:prettier",
     "lint-staged:js": "eslint --fix --cache --ext .ts,.tsx ./src",
     "lint:js": "eslint --fix --cache --ext .ts,.tsx ./src",
-    "lint:prettier": "prettier --check --write \"**/*\" --end-of-line auto",
+    "lint:prettier": "prettier --check --write \"**/*.{ts, js, json, tsx, jsx}\" --end-of-line auto",
     "start": "microbundle-crl watch --no-compress --format cjs",
     "build": "microbundle-crl --no-compress --format cjs",
     "prettier": "prettier -c --write \"**/*\"",
