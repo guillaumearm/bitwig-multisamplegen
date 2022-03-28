@@ -327,8 +327,17 @@ const generateSampleXml = (
       ? Math.min(valueFade, maximumFadeSelection)
       : 0
 
+  const param1 = sample.key
+  const param2 =
+    valueMode === 'Velocity' ? sample.velocityMax : sample.selectionMax
+
+  // TODO find an utility for this param (e.g. random using filename's prefix as a seed)
+  const param3 = 0
+
+  const zoneLogic = 'always-play' // or 'round-robin'
+
   return `
-  <sample file="${sample.name}" gain="0.00" parameter-1="0.0000" parameter-2="0.0000" parameter-3="0.0000" reverse="false" sample-start="0.000" sample-stop="-1" zone-logic="always-play">
+  <sample file="${sample.name}" gain="0.00" parameter-1="${param1}" parameter-2="${param2}" parameter-3="${param3}" reverse="false" sample-start="0.000" sample-stop="-1" zone-logic="${zoneLogic}">
     <key low-fade="${keyLowFade}" high-fade="${keyHighFade}" low="${sample.lowKey}" high="${sample.highKey}" root="${sample.key}" track="1.0000" tune="0.00"/>
     <velocity low-fade="${velocityLowFade}" high-fade="${velocityHighFade}" low="${sample.velocityMin}" high="${sample.velocityMax}" />
     <select low-fade="${selectLowFade}" high-fade="${selectHighFade}" low="${sample.selectionMin}" high="${sample.selectionMax}"/>
