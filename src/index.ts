@@ -46,7 +46,7 @@ const DEFAULT_COMPRESSION_TYPE = 'DEFLATE'
 
 const DEFAULT_SELECTION_VALUE = DEFAULT_VELOCITY
 
-type ValueMode = 'Velocity' | 'Selection'
+type ValueMode = 'Velocity' | 'Selection' | 'Round-Robin'
 
 const ALL_NOTES = [
   'C',
@@ -140,19 +140,11 @@ const getFileNamesByNoteNumber = (
     result[n].push(parsed)
   })
 
-  if (valueMode === 'Velocity') {
-    // sort by velocity
-    Object.keys(result).forEach((k) => {
-      const n = Number(k)
-      result[n] = sortBy((x) => getVelocity(x), result[n])
-    })
-  } else if (valueMode === 'Selection') {
-    // sort by selection
-    Object.keys(result).forEach((k) => {
-      const n = Number(k)
-      result[n] = sortBy((x) => getSelection(x), result[n])
-    })
-  }
+  // sort by initialNumber
+  Object.keys(result).forEach((k) => {
+    const n = Number(k)
+    result[n] = sortBy((x) => Number(x.initialNumber), result[n])
+  })
 
   return result
 }
@@ -687,7 +679,7 @@ const app = async () => {
         name: 'valueMode',
         message: 'Choose the desired value mode',
         default: 'Velocity' as ValueMode,
-        choices: ['Velocity', 'Selection'] as ValueMode[]
+        choices: ['Velocity', 'Selection', 'Round-Robin'] as ValueMode[]
       }
     ])
 
@@ -714,35 +706,41 @@ const app = async () => {
         },
         default: ''
       },
-      {
-        type: 'input',
-        name: 'keyfade',
-        message: 'Pitch fade value',
-        default: 0,
-        validate(value) {
-          const valid = !isNaN(parseFloat(value))
-          return valid || 'Please enter a number'
-        },
-        filter: (value) => {
-          const valid = !isNaN(parseFloat(value))
-          return valid ? Math.abs(Number(value)) : ''
-        }
-      },
-      {
-        type: 'input',
-        name: 'valueFade',
-        message: `${valueMode} fade value`,
-        default: 0,
-        validate(value) {
-          const valid = !isNaN(parseFloat(value))
-          return valid || 'Please enter a number'
-        },
-        filter: (value) => {
-          const valid = !isNaN(parseFloat(value))
-          return valid ? Math.abs(Number(value)) : ''
-        }
-      },
-      valueMode === 'Velocity' && nbDuplicateNotes > 0
+      valueMode !== 'Round-Robin'
+        ? {
+            type: 'input',
+            name: 'keyfade',
+            message: 'Pitch fade value',
+            default: 0,
+            validate(value) {
+              const valid = !isNaN(parseFloat(value))
+              return valid || 'Please enter a number'
+            },
+            filter: (value) => {
+              const valid = !isNaN(parseFloat(value))
+              return valid ? Math.abs(Number(value)) : ''
+            }
+          }
+        : null,
+      valueMode !== 'Round-Robin'
+        ? {
+            type: 'input',
+            name: 'valueFade',
+            message: `${valueMode} fade value`,
+            default: 0,
+            validate(value) {
+              const valid = !isNaN(parseFloat(value))
+              return valid || 'Please enter a number'
+            },
+            filter: (value) => {
+              const valid = !isNaN(parseFloat(value))
+              return valid ? Math.abs(Number(value)) : ''
+            }
+          }
+        : null,
+      valueMode !== 'Selection' &&
+      valueMode !== 'Round-Robin' &&
+      nbDuplicateNotes > 0
         ? {
             type: 'confirm',
             name: 'spreadSelection',
@@ -759,7 +757,7 @@ const app = async () => {
     const inquirerQuestions2: ReadonlyArray<inquirer.DistinctQuestion<
       any
     > | null> = [
-      info.spreadSelection === true
+      info.spreadSelection === true && valueMode !== 'Round-Robin'
         ? {
             type: 'input',
             name: 'spreadSelectionFade',
@@ -795,28 +793,31 @@ const app = async () => {
     const roundRobinAutoEnabled =
       !info2.spreadSelectionFade && !info.keyfade && !info.valueFade
 
-    if (roundRobinAutoEnabled) {
+    if (roundRobinAutoEnabled && valueMode !== 'Round-Robin') {
       ora(
         'Round-Robin mode automatically enabled (becaause no fades are set)'
       ).warn()
     }
 
+    const roundRobinEnabled =
+      roundRobinAutoEnabled || valueMode === 'Round-Robin'
+
     await generateZipFile(
       pathdir,
       transformSamples(
         samples,
-        info.keyfade,
+        info.keyfade || 0,
         valueMode,
         info.valueFade,
         spreadSelectionsFadeValue
       ),
       info.packageName,
-      info.keyfade,
+      info.keyfade || 0,
       compression,
       valueMode,
-      info.valueFade,
+      info.valueFade || 0,
       spreadSelectionsFadeValue,
-      roundRobinAutoEnabled
+      roundRobinEnabled
     )
   } else {
     ora(`Usage: ${args.$0} <pathdir>`).warn()
