@@ -449,12 +449,14 @@ const computeLowKey = (
 
   const previousSample = samples[index - 1]
 
+  const isNeighbour = previousSample.key + 1 === sample.key
+
   const value = Math.trunc((sample.key - previousSample.key) / 2)
-  const lowKey = Math.max(0, sample.key - value + 1)
+  const lowKey = Math.max(0, sample.key - value)
 
   return {
     ...sample,
-    lowKey
+    lowKey: isNeighbour ? lowKey : lowKey + 1
   }
 }
 
@@ -472,7 +474,7 @@ const computeHighKey = (
 
   const nextSample = samples[index + 1]
 
-  const value = Math.trunc((nextSample.key - sample.key + 1) / 2)
+  const value = Math.trunc((nextSample.key - sample.key) / 2)
   const highKey = Math.min(127, sample.key + value)
 
   return {
