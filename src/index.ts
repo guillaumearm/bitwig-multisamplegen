@@ -488,7 +488,7 @@ const computeHighKey = (
   }
 }
 
-const stretchNotes = (allSamples: Sample[], valueMode: ValueMode): Sample[] => {
+const stretchNotes = (allSamples: Sample[]): Sample[] => {
   let result: Sample[] = []
   const groupedSamples = groupBy(
     (x) => String(`${x.prefix}-${x.initialNumber}-${x.postfix}`),
@@ -525,7 +525,7 @@ const transformSamples = (
   valueFade: number,
   spreadSelectionsFadeValue: number | undefined
 ): Sample[] => {
-  const allSamples = stretchNotes(givenSamples, valueMode)
+  const allSamples = stretchNotes(givenSamples)
   const transformedSamples: Sample[] = allSamples
     .map((sample) => {
       return {
