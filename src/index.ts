@@ -795,7 +795,7 @@ const app = async () => {
 
     if (roundRobinAutoEnabled && valueMode !== 'Round-Robin') {
       ora(
-        'Round-Robin mode automatically enabled (becaause no fades are set)'
+        'Round-Robin mode automatically enabled (because no fades are set)'
       ).warn()
     }
 
