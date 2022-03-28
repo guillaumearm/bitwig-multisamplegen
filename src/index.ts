@@ -289,8 +289,14 @@ const generateSampleXml = (
   sample: Sample,
   keyfade: number,
   valueMode: ValueMode,
-  valueFade: number
+  valueFade: number,
+  spreadSelectionsFadeValue: number | undefined
 ): string => {
+  const selectionFade =
+    spreadSelectionsFadeValue === undefined
+      ? valueFade
+      : spreadSelectionsFadeValue
+
   const keyLowFade =
     sample.lowKey > 0
       ? Math.min(keyfade, Math.abs(sample.key - sample.lowKey))
@@ -319,12 +325,12 @@ const generateSampleXml = (
 
   const selectLowFade =
     valueMode === 'Selection' && sample.selectionMin > 0
-      ? Math.min(valueFade, maximumFadeSelection)
+      ? Math.min(selectionFade, maximumFadeSelection)
       : 0
 
   const selectHighFade =
     valueMode === 'Selection' && sample.selectionMax < 127
-      ? Math.min(valueFade, maximumFadeSelection)
+      ? Math.min(selectionFade, maximumFadeSelection)
       : 0
 
   const param1 = sample.key
@@ -352,7 +358,8 @@ const generateMultiSampleXml = (
   samples: Sample[],
   keyfade: number,
   valueMode: ValueMode,
-  valueFade: number
+  valueFade: number,
+  spreadSelectionsFadeValue: number | undefined
 ): string => {
   let xmlResult = `<?xml version="1.0" encoding="UTF-8"?>
 <multisample name="${instrumentName}">
@@ -365,7 +372,14 @@ const generateMultiSampleXml = (
 
   samples.forEach((sample) => {
     xmlResult =
-      xmlResult + generateSampleXml(sample, keyfade, valueMode, valueFade)
+      xmlResult +
+      generateSampleXml(
+        sample,
+        keyfade,
+        valueMode,
+        valueFade,
+        spreadSelectionsFadeValue
+      )
   })
 
   xmlResult = xmlResult + '</multisample>'
@@ -473,10 +487,11 @@ const transformSamples = (
   givenSamples: Sample[],
   keyfade: number,
   valueMode: ValueMode,
-  valueFade: number
+  valueFade: number,
+  spreadSelectionsFadeValue: number | undefined
 ): Sample[] => {
   const allSamples = stretchNotes(givenSamples, valueMode)
-  return allSamples
+  const transformedSamples = allSamples
     .map((sample) => {
       return {
         ...sample,
@@ -500,6 +515,13 @@ const transformSamples = (
       }
       return sample
     })
+
+  if (spreadSelectionsFadeValue !== undefined) {
+    // TODO 1: group by `key + velocityMax`
+    // TODO 2: set selectionMin and selectionMax
+  }
+
+  return transformedSamples
 }
 
 const generateZipFile = async (
@@ -509,7 +531,8 @@ const generateZipFile = async (
   keyfade: number,
   compression: 'DEFLATE' | undefined,
   valueMode: ValueMode,
-  valueFade: number
+  valueFade: number,
+  spreadSelectionsFadeValue: number | undefined
 ) => {
   const packageName = `${givenPackageName}.multisample`
 
@@ -528,7 +551,8 @@ const generateZipFile = async (
       samples,
       keyfade,
       valueMode,
-      valueFade
+      valueFade,
+      spreadSelectionsFadeValue
     ),
     { compression }
   )
@@ -581,7 +605,9 @@ const app = async () => {
       return
     }
 
-    const info = await inquirer.prompt([
+    const inquirerQuestions: ReadonlyArray<inquirer.DistinctQuestion<
+      any
+    > | null> = [
       {
         type: 'input',
         name: 'packageName',
@@ -619,24 +645,71 @@ const app = async () => {
           return valid ? Math.abs(Number(value)) : ''
         }
       },
+      valueMode === 'Velocity' // TODO: check if there is any duplicate note
+        ? {
+            type: 'confirm',
+            name: 'spreadSelection',
+            message: 'Would you want to spread samples selection ?',
+            default: false
+          }
+        : null
+    ]
+
+    const info = await inquirer.prompt(
+      inquirerQuestions.filter((x) => Boolean(x))
+    )
+
+    const inquirerQuestions2: ReadonlyArray<inquirer.DistinctQuestion<
+      any
+    > | null> = [
+      info.spreadSelection === true
+        ? {
+            type: 'input',
+            name: 'spreadSelectionFade',
+            message: 'spread selections fade value',
+            default: 0,
+            validate(value) {
+              const valid = !isNaN(parseFloat(value))
+              return valid || 'Please enter a number'
+            },
+            filter: (value) => {
+              const valid = !isNaN(parseFloat(value))
+              return valid ? Math.abs(Number(value)) : ''
+            }
+          }
+        : null,
       {
         type: 'confirm',
         name: 'compression',
         message: 'Enable compression ?',
         default: true
       }
-    ])
+    ]
 
-    const compression = info.compression ? DEFAULT_COMPRESSION_TYPE : undefined
+    const info2 = await inquirer.prompt(
+      inquirerQuestions2.filter((x) => Boolean(x))
+    )
+
+    const spreadSelectionsFadeValue: number | undefined =
+      info2.spreadSelectionFade
+
+    const compression = info2.compression ? DEFAULT_COMPRESSION_TYPE : undefined
 
     await generateZipFile(
       pathdir,
-      transformSamples(samples, info.keyfade, valueMode, info.valueFade),
+      transformSamples(
+        samples,
+        info.keyfade,
+        valueMode,
+        info.valueFade,
+        spreadSelectionsFadeValue
+      ),
       info.packageName,
       info.keyfade,
       compression,
       valueMode,
-      info.valueFade
+      info.valueFade,
+      spreadSelectionsFadeValue
     )
   } else {
     ora(`Usage: ${args.$0} <pathdir>`).warn()
