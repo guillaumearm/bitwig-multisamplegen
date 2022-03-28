@@ -41,7 +41,7 @@ const AUTHOR_NAME = 'Trapcodien'
 
 const MULTISAMPLE_FILE = 'multisample.xml'
 const DEFAULT_VELOCITY = 127
-const ALLOWED_EXTENSIONS = ['wav', 'aif', 'mp3', 'ogg']
+const ALLOWED_EXTENSIONS = ['wav', 'aif', 'mp3', 'ogg', 'flac']
 const DEFAULT_COMPRESSION_TYPE = 'DEFLATE'
 
 const DEFAULT_SELECTION_VALUE = DEFAULT_VELOCITY
